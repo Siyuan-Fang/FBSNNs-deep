@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 from FBSNNs import FBSNN
 import matplotlib.pyplot as plt
-from plotting import newfig, savefig
+# from plotting import newfig, savefig
 
 class HamiltonJacobiBellman(FBSNN):
     def __init__(self, Xi, T,
