@@ -21,7 +21,7 @@ class HamiltonJacobiBellman(FBSNN):
         return tf.reduce_sum(Z**2, 1, keepdims = True) # M x 1
     
     def g_tf(self, X): # M x D
-        return tf.log(0.5 + 0.5*tf.reduce_sum(X**2, 1, keepdims = True)) # M x 1
+        return tf.math.log(0.5 + 0.5*tf.reduce_sum(X**2, 1, keepdims = True)) # M x 1
 
     def mu_tf(self, t, X, Y, Z): # M x 1, M x D, M x 1, M x D
         return super().mu_tf(t, X, Y, Z) # M x D
@@ -48,10 +48,10 @@ if __name__ == "__main__":
                                   M, N, D,
                                   layers)
         
-    model.train(N_Iter = 2*10**4, learning_rate=1e-3)
-    model.train(N_Iter = 3*10**4, learning_rate=1e-4)
-    model.train(N_Iter = 3*10**4, learning_rate=1e-5)
-    model.train(N_Iter = 2*10**4, learning_rate=1e-6)
+    model.train(N_Iter = 2*10**2, learning_rate=1e-3)
+    # model.train(N_Iter = 3*10**4, learning_rate=1e-4)
+    # model.train(N_Iter = 3*10**4, learning_rate=1e-5)
+    # model.train(N_Iter = 2*10**4, learning_rate=1e-6)
     
     
     t_test, W_test = model.fetch_minibatch()
@@ -95,5 +95,6 @@ if __name__ == "__main__":
     plt.ylabel('relative error')
     plt.title('100-dimensional Hamilton-Jacobi-Bellman')
     # plt.legend()
+    plt.show()
     
     # savefig('./figures/HJB_Apr18_50_errors', crop = False)

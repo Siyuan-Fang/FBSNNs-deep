@@ -24,26 +24,10 @@ class FBSNN(ABC): # Forward-Backward Stochastic Neural Network
         
         # initialize NN
         self.weights, self.biases = self.initialize_NN(layers)
-        
-        # tf session
-        self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True,
-                                                     log_device_placement=True))
-        
-        # tf placeholders and graph (training)
-        self.learning_rate = tf.placeholder(tf.float32, shape=[])
-        self.t_tf = tf.placeholder(tf.float32, shape=[M, self.N+1, 1]) # M x (N+1) x 1
-        self.W_tf = tf.placeholder(tf.float32, shape=[M, self.N+1, self.D]) # M x (N+1) x D
-        self.Xi_tf = tf.placeholder(tf.float32, shape=[1, D]) # 1 x D
 
-        self.loss, self.X_pred, self.Y_pred, self.Y0_pred = self.loss_function(self.t_tf, self.W_tf, self.Xi_tf)
-                
         # optimizers
-        self.optimizer = tf.train.AdamOptimizer(learning_rate = self.learning_rate)
-        self.train_op = self.optimizer.minimize(self.loss)
-        
-        # initialize session and variables
-        init = tf.global_variables_initializer()
-        self.sess.run(init)
+        self.optimizer = tf.keras.optimizers.Adam()
+
     
     def initialize_NN(self, layers):
         weights = []
@@ -77,14 +61,18 @@ class FBSNN(ABC): # Forward-Backward Stochastic Neural Network
         return Y
     
     def net_u(self, t, X): # M x 1, M x D
-        
-        u = self.neural_net(tf.concat([t,X], 1), self.weights, self.biases) # M x 1
-        Du = tf.gradients(u, X)[0] # M x D
+        with tf.GradientTape() as tape:
+            tape.watch(X)
+            u = self.neural_net(tf.concat([t,X], 1), self.weights, self.biases) # M x 1
+        Du = tape.gradient(u, X) # M x D
         
         return u, Du
 
     def Dg_tf(self, X): # M x D
-        return tf.gradients(self.g_tf(X), X)[0] # M x D
+        with tf.GradientTape() as tape:
+            tape.watch(X)
+            g = self.g_tf(X)
+        return tape.gradient(g, X)# M x D
         
     def loss_function(self, t, W, Xi): # M x (N+1) x 1, M x (N+1) x D, 1 x D
         loss = 0
@@ -146,33 +134,36 @@ class FBSNN(ABC): # Forward-Backward Stochastic Neural Network
         return t, W
     
     def train(self, N_Iter, learning_rate):
-        
+        self.optimizer.learning_rate = learning_rate
         start_time = time.time()
         for it in range(N_Iter):
-            
-            t_batch, W_batch = self.fetch_minibatch() # M x (N+1) x 1, M x (N+1) x D
-            
-            tf_dict = {self.Xi_tf: self.Xi, self.t_tf: t_batch, self.W_tf: W_batch, self.learning_rate: learning_rate}
-            
-            self.sess.run(self.train_op, tf_dict)
-            
+
+            t_batch, W_batch = self.fetch_minibatch()  # M x (N+1) x 1, M x (N+1) x D
+            t_batch = tf.convert_to_tensor(t_batch, dtype=tf.float32)
+            W_batch = tf.convert_to_tensor(W_batch, dtype=tf.float32)
+            Xi = tf.convert_to_tensor(self.Xi, dtype=tf.float32)
+            with tf.GradientTape() as tape:
+                loss, _, _, Y0_pred = self.loss_function(t_batch, W_batch, Xi)
+            gradients = tape.gradient(loss, self.weights + self.biases)
+            self.optimizer.apply_gradients(zip(gradients, self.weights + self.biases))
+
             # Print
             if it % 10 == 0:
                 elapsed = time.time() - start_time
-                loss_value, Y0_value, learning_rate_value = self.sess.run([self.loss, self.Y0_pred, self.learning_rate], tf_dict)
+                _, _, _, Y0_value = self.loss_function(t_batch, W_batch, Xi)
                 print('It: %d, Loss: %.3e, Y0: %.3f, Time: %.2f, Learning Rate: %.3e' % 
-                      (it, loss_value, Y0_value, elapsed, learning_rate_value))
+                      (it, loss.numpy(), Y0_value.numpy(), elapsed, learning_rate))
                 start_time = time.time()
                 
     
     def predict(self, Xi_star, t_star, W_star):
+
+        Xi_star = tf.convert_to_tensor(Xi_star, dtype=tf.float32)
+        t_star = tf.convert_to_tensor(t_star, dtype=tf.float32)
+        W_star = tf.convert_to_tensor(W_star, dtype=tf.float32)
+        _, X_star, Y_star, _ = self.loss_function(t_star, W_star, Xi_star)
         
-        tf_dict = {self.Xi_tf: Xi_star, self.t_tf: t_star, self.W_tf: W_star}
-        
-        X_star = self.sess.run(self.X_pred, tf_dict)
-        Y_star = self.sess.run(self.Y_pred, tf_dict)
-        
-        return X_star, Y_star
+        return X_star.numpy(), Y_star.numpy()
     
     ###########################################################################
     ############################# Change Here! ################################
@@ -195,5 +186,5 @@ class FBSNN(ABC): # Forward-Backward Stochastic Neural Network
     def sigma_tf(self, t, X, Y): # M x 1, M x D, M x 1
         M = self.M
         D = self.D
-        return tf.matrix_diag(tf.ones([M,D])) # M x D x D
+        return tf.linalg.diag(tf.ones([M,D])) # M x D x D
     ###########################################################################
