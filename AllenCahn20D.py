@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 from FBSNNs import FBSNN
 import matplotlib.pyplot as plt
-from plotting import newfig, savefig
+# from plotting import newfig, savefig
 
 class AllenCahn(FBSNN):
     def __init__(self, Xi, T,
@@ -48,10 +48,10 @@ if __name__ == "__main__":
                       M, N, D,
                       layers)
         
-    model.train(N_Iter = 2*10**4, learning_rate=1e-3)
-    model.train(N_Iter = 3*10**4, learning_rate=1e-4)
-    model.train(N_Iter = 3*10**4, learning_rate=1e-5)
-    model.train(N_Iter = 2*10**4, learning_rate=1e-6)
+    model.train(N_Iter = 2*10**3, learning_rate=1e-3)
+    # model.train(N_Iter = 3*10**4, learning_rate=1e-4)
+    # model.train(N_Iter = 3*10**4, learning_rate=1e-5)
+    # model.train(N_Iter = 2*10**4, learning_rate=1e-6)
     
     t_test, W_test = model.fetch_minibatch()
     
@@ -70,5 +70,6 @@ if __name__ == "__main__":
     plt.ylabel('$Y_t = u(t,X_t)$')
     plt.title('20-dimensional Allen-Cahn')
     plt.legend()
+    plt.show()
     
     # savefig('./figures/AC_Apr18_15', crop = False)
