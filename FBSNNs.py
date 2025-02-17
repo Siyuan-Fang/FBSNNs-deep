@@ -7,6 +7,26 @@ import tensorflow as tf
 import time
 from abc import ABC, abstractmethod
 
+class FeedForwardSubNet(tf.keras.Model):
+    def __init__(self, layers):
+        super(FeedForwardSubNet, self).__init__()
+        self.layers_list = []
+        num_layers = len(layers)
+
+        for l in range(num_layers - 2):
+            self.layers_list.append(tf.keras.layers.Dense(layers[l + 1], activation=tf.sin,
+                                                          kernel_initializer=tf.keras.initializers.GlorotNormal()))
+
+        self.output_layer = tf.keras.layers.Dense(layers[-1], activation=None,
+                                                  kernel_initializer=tf.keras.initializers.GlorotNormal())
+
+    def call(self, X):
+        H = X
+        for layer in self.layers_list:
+            H = layer(H)
+        return self.output_layer(H)
+
+
 class FBSNN(ABC): # Forward-Backward Stochastic Neural Network
     def __init__(self, Xi, T,
                        M, N, D,
@@ -19,51 +39,16 @@ class FBSNN(ABC): # Forward-Backward Stochastic Neural Network
         self.N = N # number of time snapshots
         self.D = D # number of dimensions
         
-        # layers
-        self.layers = layers # (D+1) --> 1
-        
         # initialize NN
-        self.weights, self.biases = self.initialize_NN(layers)
+        self.model = FeedForwardSubNet(layers)
 
         # optimizers
         self.optimizer = tf.keras.optimizers.Adam()
-
-    
-    def initialize_NN(self, layers):
-        weights = []
-        biases = []
-        num_layers = len(layers) 
-        for l in range(0,num_layers-1):
-            W = self.xavier_init(size=[layers[l], layers[l+1]])
-            b = tf.Variable(tf.zeros([1,layers[l+1]], dtype=tf.float32), dtype=tf.float32)
-            weights.append(W)
-            biases.append(b)
-        return weights, biases
-        
-    def xavier_init(self, size):
-        in_dim = size[0]
-        out_dim = size[1]        
-        xavier_stddev = np.sqrt(2/(in_dim + out_dim))
-        return tf.Variable(tf.random.truncated_normal([in_dim, out_dim],
-                                               stddev=xavier_stddev), dtype=tf.float32)
-    
-    def neural_net(self, X, weights, biases):
-        num_layers = len(weights) + 1
-        
-        H = X
-        for l in range(0,num_layers-2):
-            W = weights[l]
-            b = biases[l]
-            H = tf.sin(tf.add(tf.matmul(H, W), b))
-        W = weights[-1]
-        b = biases[-1]
-        Y = tf.add(tf.matmul(H, W), b)
-        return Y
     
     def net_u(self, t, X): # M x 1, M x D
         with tf.GradientTape() as tape:
             tape.watch(X)
-            u = self.neural_net(tf.concat([t,X], 1), self.weights, self.biases) # M x 1
+            u = self.model(tf.concat([t,X], 1)) # M x 1
         Du = tape.gradient(u, X) # M x D
         
         return u, Du
@@ -144,8 +129,8 @@ class FBSNN(ABC): # Forward-Backward Stochastic Neural Network
             Xi = tf.convert_to_tensor(self.Xi, dtype=tf.float32)
             with tf.GradientTape() as tape:
                 loss, _, _, Y0_pred = self.loss_function(t_batch, W_batch, Xi)
-            gradients = tape.gradient(loss, self.weights + self.biases)
-            self.optimizer.apply_gradients(zip(gradients, self.weights + self.biases))
+            gradients = tape.gradient(loss, self.model.trainable_variables)
+            self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
 
             # Print
             if it % 10 == 0:
